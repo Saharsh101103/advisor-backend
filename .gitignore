@@ -1,0 +1,8 @@
+src/edgeql-js
+dist
+**/generated.ts
+public
+.DS_Store
+*.query.ts
+node_modules
+src/edgeql-js

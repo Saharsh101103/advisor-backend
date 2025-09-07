@@ -1,0 +1,61 @@
+module default {
+
+  scalar type SerialId extending sequence;
+  scalar type Role extending enum<STUDENT, ADVISOR>;
+
+  abstract type Object {
+    is_deleted: bool {
+      default := false;
+    }
+    created_at: datetime {
+      default := std::datetime_of_statement();
+      readonly := true;
+    }
+    updated_at: datetime {
+      rewrite insert, update using (std::datetime_of_statement());
+    }
+  }
+
+  type User extending Object {
+    required property serial_id -> SerialId;
+    required property name -> str;
+    required property email -> str {
+      constraint exclusive;
+      }
+    required property password -> str;
+    }
+
+  type Student extending Object {
+    required property major -> str;
+    required property enrollment_year -> int16;
+    required property expected_graduation -> int16;
+    required property gpa -> float32;
+    required property completed_credits -> int16;
+    required property required_credits -> int16;
+
+    # Relations
+    required link advisor -> Advisor;
+    required link user -> User;
+    required role -> Role;
+  }
+
+  type Advisor extending Object {
+    required property department -> str;
+    optional property office -> str;
+    optional property office_hours -> str;
+    optional property phone -> str;
+    required link user -> User;
+    required role -> Role;
+  }
+
+  type Course extending Object { 
+    required property serial_id -> SerialId;
+    required property code -> str;
+    required property title -> str;
+    required property credits -> int16;
+    required property description -> str;
+    multi link prerequisites -> Course;
+  }
+}
+
+
