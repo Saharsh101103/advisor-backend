@@ -2,26 +2,425 @@
 
 import type { Executor } from "gel";
 
-export type CreateUserQueryArgs = {
-  readonly email: string;
-  readonly name: string;
-  readonly password: string;
+export type AssignStudentCourseQueryArgs = {
+  readonly course_id: number;
+  readonly instructor_id: number;
+  readonly student_id: number;
+  readonly progress?: number | null;
+  readonly status?: ("UPCOMING" | "IN_PROGRESS" | "COMPLETED") | null;
 };
 
-export type CreateUserQueryReturns = {
+export type AssignStudentCourseQueryReturns = {
   id: string;
 };
 
-export function createUserQuery(
+export function assignStudentCourseQuery(
   client: Executor,
-  args: CreateUserQueryArgs
-): Promise<CreateUserQueryReturns> {
+  args: AssignStudentCourseQueryArgs
+): Promise<AssignStudentCourseQueryReturns> {
   return client.queryRequiredSingle(
     `\
-INSERT User {
-    name := <str>$name,
-    email := <str>$email,
-    password := <str>$password
+INSERT Enrollment {
+  student := (
+    SELECT Student
+    FILTER .user.serial_id = <int64>$student_id
+    LIMIT 1
+  ),
+  course := (
+    SELECT Course
+    FILTER .serial_id = <int64>$course_id
+    LIMIT 1
+  ),
+  instructor := (
+    SELECT Advisor
+    FILTER .user.serial_id = <int64>$instructor_id
+    LIMIT 1
+  ),
+  status := <optional CourseStatus>$status,    # "UPCOMING", "IN_PROGRESS", "COMPLETED"
+  progress := <optional int16>$progress
+};`,
+    args
+  );
+}
+
+export type CreateDegreeQueryArgs = {
+  readonly categories: ReadonlyArray<number>;
+  readonly major: string;
+  readonly total_credits: number;
+};
+
+export type CreateDegreeQueryReturns = {
+  id: string;
+};
+
+export function createDegreeQuery(
+  client: Executor,
+  args: CreateDegreeQueryArgs
+): Promise<CreateDegreeQueryReturns> {
+  return client.queryRequiredSingle(
+    `\
+WITH
+  categories := (SELECT RequirementCategory FILTER .serial_id IN array_unpack(<array<int64>>$categories))
+INSERT DegreeRequirement {
+  major := <str>$major,
+  total_credits := <int16>$total_credits,
+  categories := categories
+};`,
+    args
+  );
+}
+
+export type CreateEventQueryArgs = {
+  readonly date: Date;
+  readonly description: string;
+  readonly time: string;
+  readonly title: string;
+  readonly type: "CLASS" | "ADVISING" | "DEADLINE";
+  readonly location?: string | null;
+};
+
+export type CreateEventQueryReturns = {
+  id: string;
+};
+
+export function createEventQuery(
+  client: Executor,
+  args: CreateEventQueryArgs
+): Promise<CreateEventQueryReturns> {
+  return client.queryRequiredSingle(
+    `\
+INSERT Event{
+    title := <str>$title,
+    date := <datetime>$date,
+    time := <str>$time,
+    type := <EventType>$type,
+    description := <str>$description,
+    location := <optional str>$location,
+  }`,
+    args
+  );
+}
+
+export type GetDegreesQueryReturns = Array<{
+  major: string;
+  serial_id: number;
+  total_credits: number;
+  categories: Array<{
+    completed_credits: number;
+    name: string;
+    required_credits: number;
+    serial_id: number;
+    courses: Array<{
+      serial_id: number;
+      status: "UPCOMING" | "IN_PROGRESS" | "COMPLETED";
+      course: {
+        code: string;
+        credits: number;
+        description: string;
+        serial_id: number;
+        title: string;
+        prerequisites: Array<{
+          serial_id: number;
+        }>;
+      };
+    }>;
+  }>;
+}>;
+
+export function getDegreesQuery(client: Executor): Promise<GetDegreesQueryReturns> {
+  return client.query(`\
+SELECT DegreeRequirement {
+  serial_id,
+  major,
+  total_credits,
+  categories: {
+    serial_id,
+    name,
+    required_credits,
+    completed_credits,
+    courses: {
+      serial_id,
+      status,
+      course: {
+        serial_id,
+        code,
+        title,
+        credits,
+        description,
+        prerequisites: { serial_id }  # or adjust depending on schema
+      }
+    }
+  }
+};`);
+}
+
+export type GetEventsQueryReturns = Array<{
+  date: Date;
+  description: string;
+  id: string;
+  serial_id: number;
+  time: string;
+  title: string;
+  type: "CLASS" | "ADVISING" | "DEADLINE";
+  created_at: Date | null;
+  is_deleted: boolean | null;
+  location: string | null;
+  updated_at: Date | null;
+}>;
+
+export function getEventsQuery(client: Executor): Promise<GetEventsQueryReturns> {
+  return client.query(`\
+SELECT Event {
+    *
+  }
+FILTER .is_deleted = false`);
+}
+
+export type CreateRequirementCourseQueryArgs = {
+  readonly course_id: number;
+  readonly status: "UPCOMING" | "IN_PROGRESS" | "COMPLETED";
+};
+
+export type CreateRequirementCourseQueryReturns = {
+  id: string;
+};
+
+export function createRequirementCourseQuery(
+  client: Executor,
+  args: CreateRequirementCourseQueryArgs
+): Promise<CreateRequirementCourseQueryReturns> {
+  return client.queryRequiredSingle(
+    `\
+WITH course := (SELECT Course FILTER .serial_id= <int64>$course_id LIMIT 1)
+INSERT CourseRequirement {
+  course := course,
+  status := <CourseStatus>$status,
+};`,
+    args
+  );
+}
+
+export type GetStudentCoursesQueryArgs = {
+  readonly status: "UPCOMING" | "IN_PROGRESS" | "COMPLETED";
+  readonly student_id: number;
+};
+
+export type GetStudentCoursesQueryReturns = Array<{
+  id: string;
+  status: "UPCOMING" | "IN_PROGRESS" | "COMPLETED";
+  created_at: Date | null;
+  is_deleted: boolean | null;
+  progress: number | null;
+  updated_at: Date | null;
+  course: {
+    code: string;
+    credits: number;
+    serial_id: number;
+    title: string;
+  };
+  instructor: {
+    user: {
+      name: string;
+    };
+  };
+}>;
+
+export function getStudentCoursesQuery(
+  client: Executor,
+  args: GetStudentCoursesQueryArgs
+): Promise<GetStudentCoursesQueryReturns> {
+  return client.query(
+    `\
+SELECT Enrollment{
+course:{
+serial_id,
+code,
+title,
+credits
+  },
+ instructor:{
+    user: {
+        name
+      }
+  },
+  *
+  
+  }
+  FILTER .student.user.serial_id = <int16>$student_id AND .status = <CourseStatus>$status`,
+    args
+  );
+}
+
+export type GetAnnouncementsQueryReturns = Array<{
+  content: string;
+  date: Date;
+  id: string;
+  serial_id: number;
+  title: string;
+  created_at: Date | null;
+  is_deleted: boolean | null;
+  updated_at: Date | null;
+  author: {
+    name: string;
+  };
+}>;
+
+export function getAnnouncementsQuery(client: Executor): Promise<GetAnnouncementsQueryReturns> {
+  return client.query(`\
+SELECT Announcement {
+    *,
+    author: {
+          name
+      }
+  }
+FILTER .is_deleted = false`);
+}
+
+export type GetCoursesQueryReturns = Array<{
+  code: string;
+  credits: number;
+  description: string;
+  id: string;
+  serial_id: number;
+  title: string;
+  created_at: Date | null;
+  is_deleted: boolean | null;
+  updated_at: Date | null;
+  prerequisites: Array<{
+    serial_id: number;
+  }>;
+}>;
+
+export function getCoursesQuery(client: Executor): Promise<GetCoursesQueryReturns> {
+  return client.query(`\
+SELECT Course {
+    *,
+    prerequisites: {
+        serial_id
+      }
+  }
+FILTER .is_deleted = false`);
+}
+
+export type CreateCourseQueryArgs = {
+  readonly code: string;
+  readonly credits: number;
+  readonly description: string;
+  readonly title: string;
+  readonly prerequisites?: ReadonlyArray<number> | null;
+};
+
+export type CreateCourseQueryReturns = {
+  id: string;
+};
+
+export function createCourseQuery(
+  client: Executor,
+  args: CreateCourseQueryArgs
+): Promise<CreateCourseQueryReturns> {
+  return client.queryRequiredSingle(
+    `\
+INSERT Course {
+  code := <str>$code,
+  title := <str>$title,
+  credits := <int16>$credits,
+  prerequisites := (
+    SELECT DETACHED Course
+    FILTER .serial_id IN array_unpack(<optional array<int64>>$prerequisites)
+  ),
+  description := <str>$description,
+};`,
+    args
+  );
+}
+
+export type CreateRequirementCategoryQueryArgs = {
+  readonly completed_credits: number;
+  readonly courses: ReadonlyArray<number>;
+  readonly name: string;
+  readonly required_credits: number;
+};
+
+export type CreateRequirementCategoryQueryReturns = {
+  id: string;
+};
+
+export function createRequirementCategoryQuery(
+  client: Executor,
+  args: CreateRequirementCategoryQueryArgs
+): Promise<CreateRequirementCategoryQueryReturns> {
+  return client.queryRequiredSingle(
+    `\
+WITH
+  req_courses := (
+    SELECT CourseRequirement
+    FILTER .serial_id IN array_unpack(<array<int64>>$courses)
+  )
+INSERT RequirementCategory {
+  name := <str>$name,
+  required_credits := <int16>$required_credits,
+  completed_credits := <int16>$completed_credits,
+  courses := req_courses
+};`,
+    args
+  );
+}
+
+export type CreateAdvisorQueryArgs = {
+  readonly department: string;
+  readonly user_id: string;
+  readonly office?: string | null;
+  readonly office_hours?: string | null;
+  readonly phone?: string | null;
+};
+
+export type CreateAdvisorQueryReturns = {
+  id: string;
+};
+
+export function createAdvisorQuery(
+  client: Executor,
+  args: CreateAdvisorQueryArgs
+): Promise<CreateAdvisorQueryReturns> {
+  return client.queryRequiredSingle(
+    `\
+INSERT Advisor{
+  department := <str>$department,
+    office := <optional str>$office,
+    office_hours := <optional str>$office_hours,
+    phone := <optional str>$phone,  
+  user := (
+    SELECT User
+    FILTER .id= <uuid>$user_id
+    LIMIT 1
+  ),
+  role := "ADVISOR",
+};`,
+    args
+  );
+}
+
+export type CreateAnnouncementQueryArgs = {
+  readonly author: number;
+  readonly content: string;
+  readonly title: string;
+};
+
+export type CreateAnnouncementQueryReturns = {
+  id: string;
+};
+
+export function createAnnouncementQuery(
+  client: Executor,
+  args: CreateAnnouncementQueryArgs
+): Promise<CreateAnnouncementQueryReturns> {
+  return client.queryRequiredSingle(
+    `\
+INSERT Announcement {
+    title := <str>$title,
+    content := <str>$content,
+    date := datetime_current(),
+    author := (SELECT User FILTER .serial_id = <int64>$author LIMIT 1)
   }`,
     args
   );
@@ -52,28 +451,6 @@ SELECT User {
     *
   }
 FILTER .id= <uuid>$id 
-LIMIT 1`,
-    args
-  );
-}
-
-export type ValidateUserQueryArgs = {
-  readonly email: string;
-  readonly password: string;
-};
-
-export type ValidateUserQueryReturns = {
-  id: string;
-} | null;
-
-export function validateUserQuery(
-  client: Executor,
-  args: ValidateUserQueryArgs
-): Promise<ValidateUserQueryReturns> {
-  return client.querySingle(
-    `\
-SELECT User 
-FILTER .email = <str>$email AND .password = <str>$password 
 LIMIT 1`,
     args
   );
@@ -165,36 +542,49 @@ INSERT Student {
   );
 }
 
-export type CreateAdvisorQueryArgs = {
-  readonly department: string;
-  readonly user_id: string;
-  readonly office?: string | null;
-  readonly office_hours?: string | null;
-  readonly phone?: string | null;
+export type CreateUserQueryArgs = {
+  readonly email: string;
+  readonly name: string;
+  readonly password: string;
 };
 
-export type CreateAdvisorQueryReturns = {
+export type CreateUserQueryReturns = {
   id: string;
 };
 
-export function createAdvisorQuery(
+export function createUserQuery(
   client: Executor,
-  args: CreateAdvisorQueryArgs
-): Promise<CreateAdvisorQueryReturns> {
+  args: CreateUserQueryArgs
+): Promise<CreateUserQueryReturns> {
   return client.queryRequiredSingle(
     `\
-INSERT Advisor{
-  department := <str>$department,
-    office := <optional str>$office,
-    office_hours := <optional str>$office_hours,
-    phone := <optional str>$phone,  
-  user := (
-    SELECT User
-    FILTER .id= <uuid>$user_id
-    LIMIT 1
-  ),
-  role := "ADVISOR",
-};`,
+INSERT User {
+    name := <str>$name,
+    email := <str>$email,
+    password := <str>$password
+  }`,
+    args
+  );
+}
+
+export type ValidateUserQueryArgs = {
+  readonly email: string;
+  readonly password: string;
+};
+
+export type ValidateUserQueryReturns = {
+  id: string;
+} | null;
+
+export function validateUserQuery(
+  client: Executor,
+  args: ValidateUserQueryArgs
+): Promise<ValidateUserQueryReturns> {
+  return client.querySingle(
+    `\
+SELECT User 
+FILTER .email = <str>$email AND .password = <str>$password 
+LIMIT 1`,
     args
   );
 }

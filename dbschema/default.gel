@@ -2,6 +2,9 @@ module default {
 
   scalar type SerialId extending sequence;
   scalar type Role extending enum<STUDENT, ADVISOR>;
+  scalar type CourseStatus extending enum<UPCOMING, IN_PROGRESS, COMPLETED>;
+  scalar type EventType extending enum<CLASS, ADVISING, DEADLINE>;
+  scalar type DegreeStatus extending enum<COMPLETED, IN_PROGRESS, NOT_STARTED>;
 
   abstract type Object {
     is_deleted: bool {
@@ -48,7 +51,7 @@ module default {
     required role -> Role;
   }
 
-  type Course extending Object { 
+  type Course extending Object {
     required property serial_id -> SerialId;
     required property code -> str;
     required property title -> str;
@@ -56,6 +59,71 @@ module default {
     required property description -> str;
     multi link prerequisites -> Course;
   }
+  
+  # Connects student to course with progress + status 
+  type Enrollment extending Object {
+    required link student -> Student;
+    required link course -> Course;
+    required status -> CourseStatus {
+        default:= "UPCOMING"
+      }; 
+    property progress -> int16 {
+        default:= 0
+      }; # percentage 
+    required link instructor -> Advisor;
+  }
+
+  type Announcement extending Object {
+    required property serial_id -> SerialId;
+    required property title -> str;
+    required property content -> str;
+    required property date -> datetime;
+    required link author -> User;
+  }
+
+  type Event extending Object {
+    required property serial_id -> SerialId;
+    required property title -> str;
+    required property date -> datetime;
+    required property time -> str;
+    required property type -> EventType;
+    required property description -> str;
+    optional property location -> str;
+  }
+
+  
+  type DegreeRequirement extending Object {
+    required property serial_id -> SerialId;
+    required property major -> str;
+    required property total_credits -> int16;
+    multi link categories -> RequirementCategory;
+  }
+
+  type RequirementCategory extending Object {
+    required property serial_id -> SerialId;
+    required property name -> str;
+    required property required_credits -> int16;
+    required property completed_credits -> int16;
+
+    multi link courses : 
+      CourseRequirement
+    ;
+  }
+
+  type CourseRequirement extending Object {
+    required property serial_id -> SerialId;
+    required link course -> Course;
+    required property status -> CourseStatus;
+  }
+
+  type AdvisingMeeting extending Object {
+    required link student -> Student;
+    required link advisor -> Advisor;
+    required property date -> datetime;
+    required property status -> str {
+    # e.g. "SCHEDULED", "COMPLETED", "CANCELLED"
+    constraint one_of("SCHEDULED", "COMPLETED", "CANCELLED");
+  }
 }
 
-
+}

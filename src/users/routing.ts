@@ -1,14 +1,23 @@
 import { publicFactory } from "@/lib/factories";
-import { createAdvisor, createStudent, getAdvisors, getStudents } from "@/users";
+import {
+  createAdvisor,
+  createStudent,
+  getAdvisors,
+  getStudentAcademicPerformance,
+  getStudents,
+} from "@/users";
 import {
   CreateAdvisorInputSchema,
   CreateAdvisorOutputSchema,
   CreateStudentInputSchema,
   CreateStudentOutputSchema,
   GetAdvisorsOutputSchema,
+  GetStudentAcademicPerformanceInputSchema,
+  GetStudentAcademicPerformanceOutputSchema,
   GetStudentsOutputSchema,
-} from "@/User/schema";
+} from "@/users/schema";
 import { DependsOnMethod } from "express-zod-api";
+import { input } from "gel/dist/systemUtils";
 
 const createStudentEndpoint = publicFactory.build({
   method: "post",
@@ -52,9 +61,22 @@ const getAdvisorsEndpoint = publicFactory.build({
   },
 });
 
+const getAcademicPerformaceEndpoint = publicFactory.build({
+  method: "get",
+  tag: "Students",
+  description: "get student's academic performance",
+  input: GetStudentAcademicPerformanceInputSchema,
+  output: GetStudentAcademicPerformanceOutputSchema,
+  handler: async ({ input }) => {
+    return await getStudentAcademicPerformance(input);
+  },
+});
+
 const studentsRouting = new DependsOnMethod({
   get: getStudentsEndpoint,
   post: createStudentEndpoint,
+}).nest({
+  academic: getAcademicPerformaceEndpoint,
 });
 
 const advisorsRouting = new DependsOnMethod({

@@ -1,3 +1,4 @@
+import { CourseSchema } from "@/courses/schema";
 import { IDSchema } from "@/lib/schema";
 import { z } from "zod/v4";
 
@@ -85,3 +86,16 @@ export const GetAdvisorsOutputSchema = z.object({
 });
 
 export type GetAdvisorsOutput = z.infer<typeof GetAdvisorsOutputSchema>;
+
+export const GetStudentAcademicPerformanceInputSchema = z.object({ student_id: z.string() });
+
+export const GetStudentAcademicPerformanceOutputSchema = z.object({
+  academic_performance: z.number(),
+});
+
+export type GetStudentAcademicPerformanceInput = z.infer<
+  typeof GetStudentAcademicPerformanceInputSchema
+>;
+export type GetStudentAcademicPerformanceOutput = z.infer<
+  typeof GetStudentAcademicPerformanceOutputSchema
+>;

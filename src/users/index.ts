@@ -15,8 +15,10 @@ import {
   CreateAdvisorInput,
   CreateStudentInput,
   GetAdvisorsOutput,
+  GetStudentAcademicPerformanceInput,
   GetStudentsOutput,
-} from "@/User/schema";
+} from "@/users/schema";
+import { getDegrees } from "@/degree-requirements";
 
 const client = createClient();
 
@@ -115,4 +117,22 @@ export async function getAdvisors(): Promise<GetAdvisorsOutput> {
     students: advisor.students.map((id) => id.serial_id),
   }));
   return { advisors: result };
+}
+
+export async function getStudentAcademicPerformance(input: GetStudentAcademicPerformanceInput) {
+  const degrees = await getDegrees();
+  console.log("degrees:", degrees);
+  const studentsData = await getStudents();
+
+  const completedCredits = studentsData.students
+    .filter((stu) => stu.serial_id === parseInt(input.student_id))
+    .at(0)?.completed_credits;
+  const totalCredits = degrees.degrees.at(0)?.total_credits;
+  console.log("totalCredits:", totalCredits);
+
+  console.log("completedCredits:", completedCredits);
+
+  const academic_performance = Math.round((completedCredits ?? 0 / totalCredits!) * 100);
+
+  return { academic_performance };
 }
